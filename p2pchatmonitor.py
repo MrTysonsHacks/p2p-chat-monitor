@@ -29,17 +29,13 @@ def split_chunks(lines, chunk_size):
         yield lines[i:i + chunk_size]
 
 def extract_chat_response_segments(lines):
-    """
-    From the provided lines (already filtered to recent timeframe), find segments that begin with a line containing "CHAT"
-    and end with the next subsequent line containing "SLOWLY TYPING RESPONSE". Returns list of segment line lists.
-    """
     segments = []
     current_start_idx = None
     for idx, line in enumerate(lines):
         upper = line.upper()
         if "CHAT" in upper and current_start_idx is None:
             current_start_idx = idx
-        elif "SLOWLY TYPING RESPONSE" in upper and current_start_idx is not None:
+        elif ("SLOWLY TYPING RESPONSE" in upper or "BAD RESPONSE" in upper) and current_start_idx is not None:
             # include from start to this line
             segment = lines[current_start_idx: idx + 1]
             segments.append(segment)
@@ -121,4 +117,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
