@@ -4,7 +4,11 @@ import re
 import requests
 from pathlib import Path
 from datetime import datetime, timedelta
-
+class Color:
+    RED = '\033[31m'
+    GREEN = '\033[32m'
+    RESET = '\033[0m'
+    
 # === CONFIG ===
 LOG_DIR = Path(r"C:\Users\User\DreamBot\Logs\DreamBot")  # ← Adjust this to your actual log folder
 WEBHOOK_URL = "Webhook Here"
@@ -105,10 +109,10 @@ def main():
 
             segments = extract_chat_response_segments(recent_lines)
             if segments:
-                print(f"📨 Found {len(segments)} matching CHAT→SLOWLY TYPING RESPONSE segment(s); sending to Discord...")
+                print(Color.GREEN + f"📨 Found {len(segments)} matching CHAT→SLOWLY TYPING RESPONSE segment(s); sending to Discord..." + Color.RESET)
                 send_lines_in_embeds(segments, latest.name)
             else:
-                print("No matching CHAT→SLOWLY TYPING RESPONSE segments in the last 5 minutes.")
+                print(Color.RED + "No matching CHAT→SLOWLY TYPING RESPONSE or CHAT→BAD RESPONSE segments in the last 5 minutes." + Color.RESET)
 
         except Exception as e:
             print(f"Error: {e}")
@@ -117,5 +121,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
