@@ -4,6 +4,8 @@ import re
 import requests
 from pathlib import Path
 from datetime import datetime, timedelta
+import pyautogui
+import pygetwindow as gw   # NEW
 
 class Color:
     BLACK = '\033[30m'
@@ -27,17 +29,30 @@ COLOR_DEFAULT = 0x7289da  # Discord blurple
 COLOR_QUEST = 0xFFD700    # Gold
 
 last_processed_times = {}
+take_screenshots = False
 
 def get_monitor_preferences():
     print(Color.CYAN + "=== Monitor Preferences ===" + Color.RESET)
     chat_pref = input("Monitor chat events? (y/n): ").strip().lower().startswith("y")
     quest_pref = input("Monitor quest completions? (y/n): ").strip().lower().startswith("y")
+
+    global take_screenshots
+    take_screenshots = False  # default
+
+    if chat_pref:
+        screenshot_pref = input("Take screenshots of in-game chat events? (y/n): ").strip().lower().startswith("y")
+        take_screenshots = screenshot_pref
+        auto_cleanup_pref = input("Automatically delete screenshot files after sending? (y/n): ").strip().lower().startswith("y")
+
     if not chat_pref and not quest_pref:
         print(Color.YELLOW + "⚠ No segment types selected — nothing will be monitored!" + Color.RESET)
+
     return chat_pref, quest_pref
 
 def get_check_interval():
     print(Color.CYAN + "=== Check Interval Configuration ===" + Color.RESET)
+    if take_screenshots:
+        print(Color.MAGENTA + "You have chosen to take a screenshot of chat events, it is recommended to choose a check interval of 5 seconds. (0.085)" + Color.RESET)
     user_input = input("Enter the check interval in minutes (default 5): ").strip()
     try:
         interval = float(user_input)
@@ -49,6 +64,7 @@ def get_check_interval():
     if interval < 5:
         print(Color.RED + "Warning: check intervals less than 5 minutes may cause instability with larger log files." + Color.RESET)
     print(f"Check interval set to {interval} minute(s).")
+
     return int(interval * 60)
 
 def get_latest_log_file():
@@ -126,6 +142,41 @@ def send_lines_in_embeds(segments, filename, embed_title, embed_color):
             else:
                 print(f"Sent segment {seg_idx} chunk {chunk_idx}")
 
+def send_screenshot_of_dreambot():
+    try:
+        matches = gw.getWindowsWithTitle("DreamBot")
+        if not matches:
+            print("DreamBot window not found.")
+            return
+        window = matches[0]
+        if window.isMinimized:
+            window.restore()
+        window.activate()
+
+        left, top, right, bottom = window.left, window.top, window.right, window.bottom
+        screenshot = pyautogui.screenshot(region=(left, top, right-left, bottom-top))
+
+        # Unique filename with timestamp
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        file_path = f"dreambot_screenshot_{timestamp}.png"
+        screenshot.save(file_path)
+
+        with open(file_path, "rb") as f:
+            payload = {"content": f"📸 DreamBot screenshot for CHAT EVENT ({timestamp}):"}
+            files = {"file": f}
+            response = requests.post(WEBHOOK_URL, data=payload, files=files)
+
+        print("Screenshot sent, status:", response.status_code)
+
+        if auto_cleanup_pref:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"Deleted local screenshot: {file_path}")
+                return
+        
+    except Exception as e:
+        print("Error taking screenshot:", e)
+
 def main():
     print("Starting log monitor daemon...")
     print(Color.MAGENTA + "Scrapped together by @CaS5" + Color.RESET)
@@ -141,7 +192,6 @@ def main():
                 time.sleep(check_interval)
                 continue
 
-            # Detect new file
             if latest != last_file:
                 print(f"📄 New log file detected: {latest.name}")
                 last_file = latest
@@ -174,6 +224,8 @@ def main():
                     chat_segments = extract_chat_response_segments(recent_lines)
                     if chat_segments:
                         print(Color.GREEN + f"📨 Found {len(chat_segments)} chat event(s)" + Color.RESET)
+                        if take_screenshots:
+                            send_screenshot_of_dreambot()   # only if user opted in
 
                 if monitor_quests:
                     quest_segments = extract_quest_completions(recent_lines)
